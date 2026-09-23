@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AeroCast AI — City-Wide AQI Forecasting & CrowdDB Platform</title>
+  <meta name="description" content="AI-powered city-wide Air Quality Index forecasting, OpenWeather ingestion, Grok AI health intelligence, and crowd-sourced environmental hazard reporting.">
+  
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome & Lucide Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <!-- Ambient background glow layers -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <!-- Header / Navigation Bar -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-wind"></i>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">AeroCast<span class="ai-badge">AI</span></span>
+          <span class="brand-tagline">City AQI Forecaster & CrowdDB</span>
+        </div>
+      </div>
+
+      <!-- City Selector & Search -->
+      <div class="city-selector-wrapper">
+        <i class="fa-solid fa-location-dot search-icon"></i>
+        <select id="citySelect" class="city-select" aria-label="Select City">
+          <!-- Populated dynamically via JS -->
+        </select>
+        <button id="btnGeolocate" class="btn-icon" title="Find Closest City" aria-label="Find Closest City">
+          <i class="fa-solid fa-crosshairs"></i>
+        </button>
+      </div>
+
+      <!-- Global Actions -->
+      <div class="header-actions">
+        <div class="status-indicator-pill" id="apiStatusPill" title="OpenWeather & Grok Status">
+          <span class="status-dot"></span>
+          <span id="apiStatusText">Engine Ready</span>
+        </div>
+
+        <button id="btnOpenReportModal" class="btn btn-primary btn-sm">
+          <i class="fa-solid fa-bullhorn"></i>
+          <span>Report Hazard</span>
+        </button>
+
+        <button id="btnOpenSettings" class="btn btn-ghost btn-sm" title="API Keys & Settings">
+          <i class="fa-solid fa-sliders"></i>
+        </button>
+
+        <button id="btnThemeToggle" class="btn btn-ghost btn-sm" title="Toggle Dark/Light Mode">
+          <i class="fa-solid fa-moon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Body -->
+  <main class="main-content">
+    <div class="container">
+      
+      <!-- Top Overview Hero Bar -->
+      <section class="hero-section">
+        <!-- Main AQI Card -->
+        <div class="aqi-spotlight-card glass-panel" id="aqiSpotlightCard">
+          <div class="aqi-card-header">
+            <div>
+              <div class="location-badge">
+                <i class="fa-solid fa-building-shield"></i>
+                <span id="displayLocation">Delhi, India</span>
+              </div>
+              <div class="timestamp-label" id="displayTimestamp">Updated: Just now</div>
+            </div>
+            <div class="source-tag" id="displaySource">
+              <i class="fa-solid fa-microchip"></i>
+              <span id="sourceLabel">Calibrated ML Sensor</span>
+            </div>
+          </div>
+
+          <div class="aqi-main-display">
+            <div class="aqi-gauge-container">
+              <div class="aqi-radial-ring" id="aqiRadialRing">
+                <div class="aqi-inner-content">
+                  <span class="aqi-label">AQI</span>
+                  <span class="aqi-value" id="displayAqi">--</span>
+                  <span class="aqi-scale-max">/ 500</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="aqi-details">
+              <div class="bucket-badge" id="displayBucketBadge">Calculating...</div>
+              <p class="aqi-description" id="displayAqiDesc">Synthesizing multi-pollutant atmospheric measurements...</p>
+              
+              <div class="key-metrics-grid">
+                <div class="metric-pill">
+                  <span class="metric-label">Dominant Pollutant</span>
+                  <span class="metric-val" id="displayDominantPollutant">PM2.5</span>
+                </div>
+                <div class="metric-pill">
+                  <span class="metric-label">24h Peak Est.</span>
+                  <span class="metric-val" id="displayPeakEst">--</span>
+                </div>
+                <div class="metric-pill">
+                  <span class="metric-label">Crowd Hazard Reports</span>
+                  <span class="metric-val" id="displayCrowdCount">-- active</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CPCB AQI Scale Legend Bar -->
+          <div class="aqi-scale-bar-wrapper">
+            <div class="scale-track">
+              <div class="scale-segment" style="--c: #10b981;" title="Good (0-50)">Good</div>
+              <div class="scale-segment" style="--c: #84cc16;" title="Satisfactory (51-100)">Satisfactory</div>
+              <div class="scale-segment" style="--c: #f59e0b;" title="Moderate (101-200)">Moderate</div>
+              <div class="scale-segment" style="--c: #f97316;" title="Poor (201-300)">Poor</div>
+              <div class="scale-segment" style="--c: #ef4444;" title="Very Poor (301-400)">Very Poor</div>
+              <div class="scale-segment" style="--c: #881337;" title="Severe (401-500+)">Severe</div>
+            </div>
+            <div class="scale-indicator-pin" id="scaleIndicatorPin"></div>
+          </div>
+        </div>
+
+        <!-- Grok AI Executive Health Advisory Card -->
+        <div class="ai-advisory-card glass-panel">
+          <div class="card-header-styled">
+            <div class="header-left">
+              <div class="icon-avatar grok-avatar">
+                <i class="fa-solid fa-brain"></i>
+              </div>
+              <div>
+                <h3 class="card-title">Grok AI Health & Activity Intelligence</h3>
+                <span class="card-subtitle">Real-time epidemiological risk analysis</span>
+              </div>
+            </div>
+            <span class="ai-pill-active" id="grokStatusTag">
+              <i class="fa-solid fa-sparkles"></i> Grok AI Active
+            </span>
+          </div>
+
+          <div class="advisory-content" id="advisoryContent">
+            <div class="activity-status-box" id="activityBox">
+              <div class="activity-icon" id="activityIcon">
+                <i class="fa-solid fa-person-running"></i>
+              </div>
+              <div>
+                <div class="activity-title" id="activityRating">Outdoor Exertion: Cautious</div>
+                <div class="activity-desc" id="activitySummary">Loading contextual health advisory...</div>
+              </div>
+            </div>
+
+            <!-- Sensitive Cohorts Quick Grid -->
+            <div class="vulnerable-grid" id="vulnerableGrid">
+              <div class="v-card">
+                <i class="fa-solid fa-lungs"></i>
+                <div class="v-name">Asthma & Resp</div>
+                <div class="v-text" id="vAsthma">Keep rescue bronchodilators accessible.</div>
+              </div>
+              <div class="v-card">
+                <i class="fa-solid fa-child"></i>
+                <div class="v-name">Children & Elderly</div>
+                <div class="v-text" id="vChildren">Avoid early morning playground activities.</div>
+              </div>
+              <div class="v-card">
+                <i class="fa-solid fa-mask-face"></i>
+                <div class="v-name">Mask Guideline</div>
+                <div class="v-text" id="vMask">N95 respirator during commute.</div>
+              </div>
+              <div class="v-card">
+                <i class="fa-solid fa-house-chimney-window"></i>
+                <div class="v-name">Indoor Protection</div>
+                <div class="v-text" id="vIndoor">Run True HEPA filtration in bedrooms.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Navigation Tabs for Deep-Dive Views -->
+      <nav class="analytics-tabs-nav" aria-label="Analytics Tabs">
+        <button class="tab-btn active" data-tab="tabForecast">
+          <i class="fa-solid fa-chart-line"></i> 7-Day ML Forecast
+        </button>
+        <button class="tab-btn" data-tab="tabPollutants">
+          <i class="fa-solid fa-flask-vial"></i> Pollutant Chemistry
+        </button>
+        <button class="tab-btn" data-tab="tabDiurnal">
+          <i class="fa-solid fa-clock"></i> 24h Diurnal Curve
+        </button>
+        <button class="tab-btn" data-tab="tabCrowd">
+          <i class="fa-solid fa-users-viewfinder"></i> CrowdDB & Hazard Map
+          <span class="tab-counter" id="tabCrowdBadge">9</span>
+        </button>
+        <button class="tab-btn" data-tab="tabDiagnosis">
+          <i class="fa-solid fa-magnifying-glass-chart"></i> Grok AI Diagnostics
+        </button>
+        <button class="tab-btn" data-tab="tabHistory">
+          <i class="fa-solid fa-calendar-days"></i> Historical Trends
+        </button>
+      </nav>
+
+      <!-- TAB 1: 7-Day Forecast -->
+      <section class="tab-pane active" id="tabForecast">
+        <!-- 7 Forecast Mini Cards -->
+        <div class="forecast-cards-row" id="forecastCardsRow">
+          <!-- Populated by JS -->
+        </div>
+
+        <div class="glass-panel chart-container-panel">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title">City-Wide 7-Day Projected AQI Trend</h3>
+              <p class="panel-subtitle">Trained Time-Series Model blended with OpenWeather 5-day atmospheric vectors</p>
+            </div>
+            <div class="chart-legend-custom">
+              <span class="legend-chip chip-forecast"><span class="chip-dot"></span> Predicted AQI</span>
+              <span class="legend-chip chip-range"><span class="chip-dot"></span> Uncertainty Band</span>
+            </div>
+          </div>
+          <div class="canvas-wrapper">
+            <canvas id="forecastChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: Pollutant Chemistry Breakdown -->
+      <section class="tab-pane" id="tabPollutants">
+        <div class="grid-2-col">
+          <!-- Pollutants Metric Grid -->
+          <div class="glass-panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Chemical Pollutant Concentrations</h3>
+                <p class="panel-subtitle">Current readings compared against Indian CPCB 24-hour limits</p>
+              </div>
+            </div>
+            <div class="pollutants-list" id="pollutantsList">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Radar / Multi-bar Chart -->
+          <div class="glass-panel chart-container-panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Pollution Ratio Profile vs CPCB Limit</h3>
+                <p class="panel-subtitle">Values > 1.0 indicate exceedance of safe statutory threshold</p>
+              </div>
+            </div>
+            <div class="canvas-wrapper">
+              <canvas id="pollutantsChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: 24h Diurnal Curve -->
+      <section class="tab-pane" id="tabDiurnal">
+        <div class="glass-panel chart-container-panel">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title">24-Hour Diurnal Pollution Cycle</h3>
+              <p class="panel-subtitle">Hourly trajectory showing morning rush, afternoon solar dispersion, and nocturnal inversion entrapment</p>
+            </div>
+            <div class="best-window-pill" id="bestWindowPill">
+              <i class="fa-solid fa-person-walking"></i> Safe Window: 2:00 PM – 5:00 PM
+            </div>
+          </div>
+          <div class="canvas-wrapper">
+            <canvas id="diurnalChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: CrowdDB & Interactive Hazard Map -->
+      <section class="tab-pane" id="tabCrowd">
+        <div class="crowd-layout">
+          <!-- Interactive Map -->
+          <div class="glass-panel map-panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">Interactive City AQI & Citizen Hazard Map</h3>
+                <p class="panel-subtitle">Click markers to inspect city stations and crowd-reported hotspots</p>
+              </div>
+              <div class="map-controls">
+                <button class="btn btn-xs btn-outline" id="btnRecenterMap">
+                  <i class="fa-solid fa-arrows-to-dot"></i> Recenter
+                </button>
+              </div>
+            </div>
+            <div id="interactiveMap" class="map-container"></div>
+          </div>
+
+          <!-- Crowd Reports Feed & Controls -->
+          <div class="glass-panel crowd-feed-panel">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">CrowdDB Incidents Feed</h3>
+                <p class="panel-subtitle">Verified citizen pollution alerts</p>
+              </div>
+              <button class="btn btn-primary btn-xs" id="btnReportIncidentInline">
+                <i class="fa-solid fa-plus"></i> Add Report
+              </button>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="feed-filter-bar">
+              <button class="filter-chip active" data-filter="all">All Cities</button>
+              <button class="filter-chip" data-filter="current" id="filterCurrentCityBtn">Active City</button>
+            </div>
+
+            <div class="crowd-reports-list" id="crowdReportsList">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: Grok AI Diagnostics & Copilot -->
+      <section class="tab-pane" id="tabDiagnosis">
+        <div class="grid-2-col">
+          <!-- Root Cause Diagnostics Card -->
+          <div class="glass-panel">
+            <div class="panel-header">
+              <div class="header-left">
+                <div class="icon-avatar">
+                  <i class="fa-solid fa-microscope"></i>
+                </div>
+                <div>
+                  <h3 class="panel-title">Grok Atmospheric Root-Cause Diagnosis</h3>
+                  <p class="panel-subtitle">Attribution of emissions via chemical stoichiometry</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="diagnosis-body" id="diagnosisBody">
+              <div class="diagnosis-card-item">
+                <div class="diag-title"><i class="fa-solid fa-smog"></i> Primary Driver</div>
+                <div class="diag-text highlight" id="diagPrimary">Analyzing chemical signature...</div>
+              </div>
+
+              <div class="diagnosis-card-item">
+                <div class="diag-title"><i class="fa-solid fa-cloud"></i> Meteorological Context</div>
+                <div class="diag-text" id="diagMeteo">Evaluating boundary layer height and ventilation coefficient...</div>
+              </div>
+
+              <div class="diagnosis-card-item">
+                <div class="diag-title"><i class="fa-solid fa-chart-pie"></i> Estimated Source Breakdown</div>
+                <div class="source-bars" id="diagSourceBars">
+                  <!-- Populated by JS -->
+                </div>
+              </div>
+
+              <div class="diagnosis-card-item">
+                <div class="diag-title"><i class="fa-solid fa-shield-halved"></i> Actionable Mitigation</div>
+                <div class="diag-text" id="diagAction">Targeted municipal dust suppression and emission control.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interactive Environmental Copilot Chat -->
+          <div class="glass-panel copilot-panel">
+            <div class="panel-header">
+              <div class="header-left">
+                <div class="icon-avatar grok-avatar">
+                  <i class="fa-solid fa-robot"></i>
+                </div>
+                <div>
+                  <h3 class="panel-title">Grok Air Quality Copilot</h3>
+                  <p class="panel-subtitle">Ask questions about mitigation, purifiers, routes & health</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chat messages stream -->
+            <div class="chat-messages-container" id="chatMessages">
+              <div class="chat-bubble chat-bubble-ai">
+                <div class="bubble-avatar"><i class="fa-solid fa-brain"></i></div>
+                <div class="bubble-text">
+                  Hello! I am your <strong>Grok Environmental Copilot</strong>. I am tracking real-time air pollution data and ML forecasts for your city. Ask me anything about mask efficacy, safe outdoor exercise windows, or local pollution causes!
+                </div>
+              </div>
+            </div>
+
+            <!-- Suggested prompt chips -->
+            <div class="prompt-chips">
+              <button class="chip-btn" data-prompt="Is it safe for me to go for a run right now?">🏃 Safe to run?</button>
+              <button class="chip-btn" data-prompt="What type of mask is best for today's PM2.5 level?">😷 Which mask?</button>
+              <button class="chip-btn" data-prompt="How can I improve indoor air quality at home?">🏠 Indoor tips</button>
+            </div>
+
+            <!-- Chat Input -->
+            <form id="chatForm" class="chat-input-bar">
+              <input type="text" id="chatInput" placeholder="Ask Grok about air quality, masks, or forecasts..." autocomplete="off">
+              <button type="submit" class="btn btn-primary btn-icon-round" aria-label="Send Message">
+                <i class="fa-solid fa-paper-plane"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 6: Historical Trends Explorer -->
+      <section class="tab-pane" id="tabHistory">
+        <div class="glass-panel chart-container-panel">
+          <div class="panel-header">
+            <div>
+              <h3 class="panel-title">Historical AQI Profile (Dataset 2015–2020)</h3>
+              <p class="panel-subtitle">Multi-year records and seasonal behavior across Indian cities</p>
+            </div>
+            <div class="history-metrics-summary" id="historySummary">
+              <!-- Summary tags populated by JS -->
+            </div>
+          </div>
+          <div class="canvas-wrapper">
+            <canvas id="historyChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Citizen Pollution Report Modal (CrowdDB) -->
+  <div class="modal-overlay" id="reportModal" aria-hidden="true">
+    <div class="modal-card glass-panel" role="dialog" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <div class="header-left">
+          <div class="icon-avatar">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <div>
+            <h3 class="modal-title" id="modalTitle">Report Local Pollution Incident</h3>
+            <p class="modal-subtitle">Submit ground observation to CrowdDB for instant Grok AI evaluation</p>
+          </div>
+        </div>
+        <button class="btn-close" id="btnCloseReportModal" aria-label="Close modal">&times;</button>
+      </div>
+
+      <form id="reportForm" class="modal-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="reportCity">Target City</label>
+            <select id="reportCity" required>
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="reportHazardType">Incident Type</label>
+            <select id="reportHazardType" required>
+              <option value="Garbage/Plastic Fire">Garbage / Plastic Fire</option>
+              <option value="Stubble Burning">Crop / Stubble Burning</option>
+              <option value="Heavy Traffic Jam">Heavy Traffic Congestion / Idling</option>
+              <option value="Industrial Emission">Industrial Smokestack / Flare</option>
+              <option value="Construction Dust">Uncovered Construction Dust</option>
+              <option value="Chemical/Pungent Odor">Chemical / Pungent Odor</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="reportLocation">Specific Location / Landmark</label>
+          <input type="text" id="reportLocation" placeholder="e.g. Ring Road Junction, near Metro Pillar 142" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="reportSeverity">Observed Severity</label>
+            <select id="reportSeverity" required>
+              <option value="Low">Low (Faint haze, noticeable smell)</option>
+              <option value="Moderate" selected>Moderate (Visible smoke plume, localized spread)</option>
+              <option value="Severe">Severe (Dense black smoke, eye burning)</option>
+              <option value="Hazardous">Hazardous (Zero visibility, acute choking hazard)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="reportSymptoms">Health Symptoms Noticed</label>
+            <input type="text" id="reportSymptoms" placeholder="e.g. Eye irritation, coughing, throat burning">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="reportDescription">Incident Description</label>
+          <textarea id="reportDescription" rows="3" placeholder="Provide details on the size of the plume, ongoing duration, and surrounding impact..." required></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="btnCancelReport">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btnSubmitReport">
+            <i class="fa-solid fa-paper-plane"></i>
+            <span>Submit to CrowdDB</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- API Settings Modal -->
+  <div class="modal-overlay" id="settingsModal" aria-hidden="true">
+    <div class="modal-card glass-panel" role="dialog" aria-labelledby="settingsTitle">
+      <div class="modal-header">
+        <div class="header-left">
+          <div class="icon-avatar">
+            <i class="fa-solid fa-sliders"></i>
+          </div>
+          <div>
+            <h3 class="modal-title" id="settingsTitle">System API & Intelligence Settings</h3>
+            <p class="modal-subtitle">Connect live OpenWeather & Grok (xAI) credentials</p>
+          </div>
+        </div>
+        <button class="btn-close" id="btnCloseSettingsModal" aria-label="Close settings">&times;</button>
+      </div>
+
+      <form id="settingsForm" class="modal-form">
+        <div class="settings-status-box">
+          <div class="setting-item">
+            <div class="setting-label-row">
+              <span class="s-name"><i class="fa-solid fa-cloud-sun"></i> OpenWeather API</span>
+              <span class="badge" id="owStatusBadge">Checking...</span>
+            </div>
+            <p class="setting-hint">Provides live satellite & sensor air pollution components.</p>
+            <input type="password" id="inputOwKey" placeholder="Paste OpenWeather API Key...">
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label-row">
+              <span class="s-name"><i class="fa-solid fa-brain"></i> Grok (xAI) API</span>
+              <span class="badge" id="grokStatusBadge">Checking...</span>
+            </div>
+            <p class="setting-hint">Powers epidemiological health advisories, cause attribution, and copilot reasoning.</p>
+            <input type="password" id="inputGrokKey" placeholder="Paste Grok (xAI) API Key...">
+          </div>
+        </div>
+
+        <div class="env-note">
+          <i class="fa-solid fa-circle-info"></i>
+          <span>Keys saved here are securely applied in real-time and persisted to your <code>.env</code> file.</span>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="btnCancelSettings">Close</button>
+          <button type="submit" class="btn btn-primary" id="btnSaveSettings">
+            <i class="fa-solid fa-check"></i>
+            <span>Save & Connect</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Application Logic -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
